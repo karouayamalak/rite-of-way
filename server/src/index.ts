@@ -34,6 +34,15 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+// Database connection middleware (ensures connection in serverless environments)
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,

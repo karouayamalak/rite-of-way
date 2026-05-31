@@ -1,23 +1,27 @@
 import mongoose from 'mongoose';
 import dns from 'dns';
 
-dns.setDefaultResultOrder('ipv4first');
-dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+// Only set custom DNS options in development to avoid issues in restricted serverless environments like Vercel
+if (process.env.NODE_ENV === 'development') {
+  dns.setDefaultResultOrder('ipv4first');
+  try {
+    dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+  } catch (err) {
+    console.warn('Failed to set DNS servers:', err);
+  }
+}
 
 let isConnected = false;
 
 export const connectDB = async (): Promise<void> => {
   if (isConnected) {
-    console.log('📦 MongoDB already connected');
     return;
   }
 
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/rite-of-way';
 
   try {
-    const conn = await mongoose.connect(uri, {
-      bufferCommands: false,
-    });
+    const conn = await mongoose.connect(uri);
 
     isConnected = true;
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
@@ -33,7 +37,10 @@ export const connectDB = async (): Promise<void> => {
     });
   } catch (error) {
     console.error('❌ Failed to connect to MongoDB:', error);
-    process.exit(1);
+    if (process.env.NODE_ENV === 'development') {
+      process.exit(1);
+    }
+    throw error;
   }
 };
 
