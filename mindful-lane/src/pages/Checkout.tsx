@@ -259,8 +259,8 @@ const Checkout = () => {
               <div className="border-t border-border pt-6 mt-8">
                 <h3 className="text-sm uppercase tracking-[1px] mb-4">Order Summary</h3>
                 {items.map((item) => (
-                  <div key={`${item.id}-${item.size}`} className="flex justify-between text-sm py-2">
-                    <span>{item.title} {item.size && `(${item.size})`} × {item.quantity}</span>
+                  <div key={`${item.id}-${item.color || ''}-${item.size || ''}`} className="flex justify-between text-sm py-2">
+                    <span>{item.title} {item.color || item.size ? `(${[item.color, item.size].filter(Boolean).join(" - ")})` : ""} × {item.quantity}</span>
                     <span>{formatDZD(item.price * item.quantity)}</span>
                   </div>
                 ))}

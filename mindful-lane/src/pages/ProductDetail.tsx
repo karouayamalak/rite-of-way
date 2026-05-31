@@ -18,6 +18,10 @@ interface ApiProduct {
   images: { url: string; alt?: string }[];
   badge?: string;
   ratings: { average: number; count: number };
+  variants?: {
+    color: string;
+    sizes: { size: string; stock: number }[];
+  }[];
 }
 
 interface Review { _id: string; userName: string; rating: number; comment: string; createdAt: string; }
@@ -115,9 +119,31 @@ const ProductDetail = () => {
   const related = relatedData?.data || [];
   const needsSize = !["Glasses", "Hats", "One Size"].includes(product.category);
 
+  // Calculate variant-specific stock
+  let availableStock = product.stock;
+  if (product.variants && product.variants.length > 0) {
+    if (selectedColor && selectedSize) {
+      const variant = product.variants.find(v => v.color.toLowerCase() === selectedColor.toLowerCase());
+      const sizeObj = variant?.sizes.find(s => s.size.toLowerCase() === selectedSize.toLowerCase());
+      availableStock = sizeObj ? sizeObj.stock : 0;
+    } else if (selectedColor) {
+      const variant = product.variants.find(v => v.color.toLowerCase() === selectedColor.toLowerCase());
+      availableStock = variant ? variant.sizes.reduce((sum, s) => sum + s.stock, 0) : 0;
+    } else if (selectedSize) {
+      availableStock = product.variants.reduce((sum, v) => {
+        const sizeObj = v.sizes.find(s => s.size.toLowerCase() === selectedSize.toLowerCase());
+        return sum + (sizeObj ? sizeObj.stock : 0);
+      }, 0);
+    }
+  }
+
   const handleAddToCart = () => {
     if (needsSize && product.sizes.length > 0 && !selectedSize) {
       toast.error("Please select a size");
+      return;
+    }
+    if (quantity > availableStock) {
+      toast.error("Requested quantity exceeds available stock");
       return;
     }
     for (let i = 0; i < quantity; i++) {
@@ -235,12 +261,27 @@ const ProductDetail = () => {
               <div className="mb-8">
                 <p className="text-sm uppercase tracking-[1px] mb-3">Size: <span className="text-muted-foreground">{selectedSize || "Select"}</span></p>
                 <div className="flex gap-2 flex-wrap">
-                  {product.sizes.map((size) => (
-                    <button key={size} onClick={() => setSelectedSize(size)}
-                      className={`w-12 h-12 text-sm border transition-colors cursor-pointer ${selectedSize === size ? "bg-foreground text-background border-foreground" : "bg-transparent text-foreground border-border hover:border-foreground"}`}>
-                      {size}
-                    </button>
-                  ))}
+                  {product.sizes.map((size) => {
+                    let isOutOfStock = false;
+                    if (selectedColor && product.variants) {
+                      const variant = product.variants.find(v => v.color.toLowerCase() === selectedColor.toLowerCase());
+                      const sizeObj = variant?.sizes.find(s => s.size.toLowerCase() === size.toLowerCase());
+                      isOutOfStock = !sizeObj || sizeObj.stock === 0;
+                    }
+                    return (
+                      <button key={size} onClick={() => setSelectedSize(size)}
+                        className={`w-12 h-12 text-sm border transition-colors cursor-pointer ${
+                          selectedSize === size
+                            ? "bg-foreground text-background border-foreground"
+                            : isOutOfStock
+                            ? "border-border text-muted-foreground line-through opacity-50"
+                            : "bg-transparent text-foreground border-border hover:border-foreground"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -251,17 +292,17 @@ const ProductDetail = () => {
               <div className="flex items-center gap-1 w-fit border border-border">
                 <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-10 h-10 flex items-center justify-center bg-transparent border-none cursor-pointer hover:bg-secondary transition-colors"><Minus size={14} /></button>
                 <span className="w-10 text-center text-sm">{quantity}</span>
-                <button onClick={() => setQuantity(Math.min(product.stock, quantity + 1))} className="w-10 h-10 flex items-center justify-center bg-transparent border-none cursor-pointer hover:bg-secondary transition-colors"><Plus size={14} /></button>
+                <button onClick={() => setQuantity(Math.min(availableStock, quantity + 1))} className="w-10 h-10 flex items-center justify-center bg-transparent border-none cursor-pointer hover:bg-secondary transition-colors"><Plus size={14} /></button>
               </div>
-              {product.stock <= 5 && product.stock > 0 && (
-                <p className="text-xs text-amber-600 mt-2">Only {product.stock} left in stock</p>
+              {availableStock <= 5 && availableStock > 0 && (
+                <p className="text-xs text-amber-600 mt-2">Only {availableStock} left in stock</p>
               )}
-              {product.stock === 0 && <p className="text-xs text-destructive mt-2">Out of stock</p>}
+              {availableStock === 0 && <p className="text-xs text-destructive mt-2">Out of stock</p>}
             </div>
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button onClick={handleAddToCart} disabled={product.stock === 0}
+              <button onClick={handleAddToCart} disabled={availableStock === 0}
                 className={`flex-1 py-4 text-sm font-medium tracking-[1px] uppercase border-none cursor-pointer transition-colors duration-300 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${addedToCart ? "bg-green-600 text-white" : "bg-foreground text-background hover:bg-accent"}`}>
                 {addedToCart ? <><Check size={16} /> Added!</> : <><ShoppingBag size={16} /> Add to Cart</>}
               </button>

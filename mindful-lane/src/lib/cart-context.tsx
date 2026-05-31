@@ -19,8 +19,8 @@ export interface CartItem extends Product {
 interface CartContextType {
   items: CartItem[];
   addItem: (product: Product, size?: string, color?: string) => void;
-  removeItem: (id: string, size?: string) => void;
-  updateQuantity: (id: string, quantity: number, size?: string) => void;
+  removeItem: (id: string, size?: string, color?: string) => void;
+  updateQuantity: (id: string, quantity: number, size?: string, color?: string) => void;
   clearCart: () => void;
   totalItems: number;
   totalPrice: number;
@@ -47,32 +47,32 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  const getKey = (id: string, size?: string) => `${id}|${size || ''}`;
+  const getKey = (id: string, size?: string, color?: string) => `${id}|${color || ''}|${size || ''}`;
 
   const addItem = useCallback((product: Product, size?: string, color?: string) => {
     setItems((prev) => {
-      const key = getKey(product.id, size);
-      const existing = prev.find((item) => getKey(item.id, item.size) === key);
+      const key = getKey(product.id, size, color);
+      const existing = prev.find((item) => getKey(item.id, item.size, item.color) === key);
       if (existing) {
         return prev.map((item) =>
-          getKey(item.id, item.size) === key ? { ...item, quantity: item.quantity + 1 } : item
+          getKey(item.id, item.size, item.color) === key ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       return [...prev, { ...product, quantity: 1, size, color }];
     });
   }, []);
 
-  const removeItem = useCallback((id: string, size?: string) => {
-    setItems((prev) => prev.filter((item) => getKey(item.id, item.size) !== getKey(id, size)));
+  const removeItem = useCallback((id: string, size?: string, color?: string) => {
+    setItems((prev) => prev.filter((item) => getKey(item.id, item.size, item.color) !== getKey(id, size, color)));
   }, []);
 
-  const updateQuantity = useCallback((id: string, quantity: number, size?: string) => {
+  const updateQuantity = useCallback((id: string, quantity: number, size?: string, color?: string) => {
     if (quantity <= 0) {
-      setItems((prev) => prev.filter((item) => getKey(item.id, item.size) !== getKey(id, size)));
+      setItems((prev) => prev.filter((item) => getKey(item.id, item.size, item.color) !== getKey(id, size, color)));
     } else {
       setItems((prev) =>
         prev.map((item) =>
-          getKey(item.id, item.size) === getKey(id, size) ? { ...item, quantity } : item
+          getKey(item.id, item.size, item.color) === getKey(id, size, color) ? { ...item, quantity } : item
         )
       );
     }

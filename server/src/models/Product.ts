@@ -7,6 +7,16 @@ export interface IProductImage {
   alt?: string;
 }
 
+export interface ISizeStock {
+  size: string;
+  stock: number;
+}
+
+export interface IColorVariant {
+  color: string;
+  sizes: ISizeStock[];
+}
+
 export interface IProduct extends Document {
   title: string;
   slug: string;
@@ -19,6 +29,7 @@ export interface IProduct extends Document {
   colors: string[];
   stock: number;
   images: IProductImage[];
+  variants?: IColorVariant[];
   badge?: string;
   isFeatured: boolean;
   isTrending: boolean;
@@ -36,6 +47,16 @@ const ProductImageSchema = new Schema<IProductImage>({
   publicId: { type: String, default: '' },
   alt: { type: String, default: '' },
 });
+
+const SizeStockSchema = new Schema<ISizeStock>({
+  size: { type: String, required: true, trim: true },
+  stock: { type: Number, required: true, min: [0, 'Stock cannot be negative'], default: 0 },
+}, { _id: false });
+
+const ColorVariantSchema = new Schema<IColorVariant>({
+  color: { type: String, required: true, trim: true },
+  sizes: [SizeStockSchema],
+}, { _id: false });
 
 const ProductSchema = new Schema<IProduct>(
   {
@@ -85,6 +106,7 @@ const ProductSchema = new Schema<IProduct>(
       default: 0,
     },
     images: [ProductImageSchema],
+    variants: [ColorVariantSchema],
     badge: { type: String, trim: true },
     isFeatured: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
@@ -97,7 +119,7 @@ const ProductSchema = new Schema<IProduct>(
   { timestamps: true }
 );
 
-// ─── Auto-generate slug from title ────────────────────────────────────────
+// ─── Auto-generate slug from title and calculate variants stock ───────────
 ProductSchema.pre('save', async function (this: IProduct, next) {
   if (this.isModified('title')) {
     let slug = slugify(this.title, { lower: true, strict: true });
@@ -108,6 +130,23 @@ ProductSchema.pre('save', async function (this: IProduct, next) {
     }
     this.slug = slug;
   }
+
+  // Automatically calculate stock, colors, and sizes fields from variants
+  if (this.variants && this.variants.length > 0) {
+    this.colors = this.variants.map((v: any) => v.color);
+    
+    const sizesSet = new Set<string>();
+    let totalStock = 0;
+    this.variants.forEach((v: any) => {
+      v.sizes.forEach((s: any) => {
+        sizesSet.add(s.size);
+        totalStock += s.stock;
+      });
+    });
+    this.sizes = Array.from(sizesSet);
+    this.stock = totalStock;
+  }
+
   next();
 });
 

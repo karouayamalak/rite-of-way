@@ -41,7 +41,7 @@ const Cart = () => {
         <AnimatePresence>
           {items.map((item) => (
             <motion.div
-              key={item.id}
+              key={`${item.id}-${item.color || ''}-${item.size || ''}`}
               layout
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -57,12 +57,19 @@ const Cart = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-base tracking-[1px] mb-1">{item.title}</h3>
+                    {(item.color || item.size) && (
+                      <p className="text-xs text-muted-foreground mt-0.5 mb-1 uppercase tracking-[0.5px]">
+                        {item.color && `Color: ${item.color}`}
+                        {item.color && item.size && " | "}
+                        {item.size && `Size: ${item.size}`}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       {item.price.toLocaleString("fr-DZ")} DA
                     </p>
                   </div>
                   <button
-                    onClick={() => removeItem(item.id)}
+                    onClick={() => removeItem(item.id, item.size, item.color)}
                     className="text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer"
                     aria-label="Remove item"
                   >
@@ -71,14 +78,14 @@ const Cart = () => {
                 </div>
                 <div className="flex items-center gap-4 mt-4">
                   <button
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                    onClick={() => updateQuantity(item.id, item.quantity - 1, item.size, item.color)}
                     className="w-8 h-8 flex items-center justify-center border border-border bg-transparent hover:bg-secondary transition-colors cursor-pointer"
                   >
                     <Minus size={14} />
                   </button>
                   <span className="text-sm w-8 text-center">{item.quantity}</span>
                   <button
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    onClick={() => updateQuantity(item.id, item.quantity + 1, item.size, item.color)}
                     className="w-8 h-8 flex items-center justify-center border border-border bg-transparent hover:bg-secondary transition-colors cursor-pointer"
                   >
                     <Plus size={14} />

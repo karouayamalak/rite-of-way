@@ -236,7 +236,30 @@ const seed = async () => {
     console.log(`✅ Seeded ${categories.length} categories`);
 
     // Seed products
-    await Product.create(products);
+    const productsWithVariants = products.map((p) => {
+      const colors = p.colors || [];
+      const sizes = p.sizes || [];
+      const totalStock = p.stock || 0;
+
+      // Distribute stock across variants
+      const comboCount = colors.length * sizes.length;
+      const distributedStock = comboCount > 0 ? Math.ceil(totalStock / comboCount) : 0;
+
+      const variants = colors.map((color) => ({
+        color,
+        sizes: sizes.map((size) => ({
+          size,
+          stock: distributedStock,
+        })),
+      }));
+
+      return {
+        ...p,
+        variants,
+      };
+    });
+
+    await Product.create(productsWithVariants);
     console.log(`✅ Seeded ${products.length} products`);
 
     // Create admin user if it doesn't exist

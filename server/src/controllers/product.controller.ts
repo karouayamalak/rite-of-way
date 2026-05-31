@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product';
 import { Review } from '../models/Review';
+import { Category } from '../models/Category';
 import { createError } from '../middleware/errorHandler';
 
 // ─── Get All Products (with filters, search, pagination) ──────────────────
@@ -131,7 +132,12 @@ export const deleteProduct = async (req: Request, res: Response, next: NextFunct
 // ─── Get Categories ────────────────────────────────────────────────────────
 export const getCategories = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categories = await Product.distinct('category');
+    const categories = await Category.find({ isActive: true }).distinct('name');
+    if (categories.length === 0) {
+      const distinct = await Product.distinct('category');
+      res.json({ success: true, data: distinct });
+      return;
+    }
     res.json({ success: true, data: categories });
   } catch (error) {
     next(error);
