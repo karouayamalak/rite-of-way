@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package,
-  Users, DollarSign, Clock, ChevronRight
+  Users, DollarSign, Clock, ChevronRight, AlertTriangle
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -66,6 +66,13 @@ const StatCard = ({
   </motion.div>
 );
 
+interface DashboardProduct {
+  _id: string;
+  title: string;
+  stock: number;
+  category: string;
+}
+
 const AdminDashboard = () => {
   const { data: statsData, isLoading } = useQuery({
     queryKey: ["admin-dashboard"],
@@ -83,9 +90,15 @@ const AdminDashboard = () => {
     queryFn: () => api.get<{ success: boolean; data: TopProduct[] }>("/admin/analytics/top-products"),
   });
 
+  const { data: productsData } = useQuery({
+    queryKey: ["admin-products-low-stock"],
+    queryFn: () => api.get<{ success: boolean; data: DashboardProduct[] }>("/products?limit=100"),
+  });
+
   const stats = statsData?.data;
   const chart = chartData?.data || [];
   const topProducts = topData?.data || [];
+  const lowStockProducts = productsData?.data?.filter((p) => p.stock <= 5) || [];
 
   if (isLoading) {
     return (
@@ -144,6 +157,37 @@ const AdminDashboard = () => {
           <Link to="/admin/orders?status=pending" className="text-xs uppercase tracking-[1px] text-amber-600 hover:text-amber-800 no-underline">
             View All <ChevronRight size={12} className="inline" />
           </Link>
+        </motion.div>
+      )}
+
+      {/* Low Stock alert */}
+      {lowStockProducts.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 px-5 py-4">
+          <div className="flex items-center gap-3 mb-3">
+            <AlertTriangle size={16} className="text-red-600" />
+            <span className="text-sm font-medium text-red-800 dark:text-red-400">
+              Low Stock Alerts ({lowStockProducts.length} item{lowStockProducts.length !== 1 ? "s" : ""})
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {lowStockProducts.map((p) => (
+              <div key={p._id} className="flex items-center justify-between bg-card border border-border p-3 text-xs">
+                <div className="min-w-0 flex-1 pr-2">
+                  <p className="font-medium truncate text-foreground">{p.title}</p>
+                  <p className="text-muted-foreground mt-0.5 uppercase tracking-[0.5px] text-[10px]">{p.category}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`px-2 py-0.5 font-semibold ${p.stock === 0 ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400"}`}>
+                    {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} LEFT`}
+                  </span>
+                  <Link to={`/admin/products/${p._id}/edit`} className="text-accent hover:underline uppercase tracking-[0.5px] font-medium font-sans">
+                    Restock
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
         </motion.div>
       )}
 

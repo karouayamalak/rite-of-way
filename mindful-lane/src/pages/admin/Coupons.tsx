@@ -22,6 +22,7 @@ const AdminCoupons = () => {
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const qc = useQueryClient();
 
   // Form states
@@ -70,6 +71,7 @@ const AdminCoupons = () => {
     onSuccess: () => {
       toast.success("Coupon deleted successfully");
       qc.invalidateQueries({ queryKey: ["admin-coupons"] });
+      setDeleteId(null);
     },
     onError: (err) => {
       if (err instanceof ApiError) toast.error(err.message);
@@ -307,9 +309,7 @@ const AdminCoupons = () => {
                             Edit
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm("Delete this coupon?")) deleteMutation.mutate(coupon._id);
-                            }}
+                            onClick={() => setDeleteId(coupon._id)}
                             className="text-muted-foreground hover:text-destructive transition-colors bg-transparent border-none cursor-pointer p-1"
                             title="Delete Coupon"
                           >
@@ -456,6 +456,55 @@ const AdminCoupons = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirm dialog */}
+      <AnimatePresence>
+        {deleteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeleteId(null)}
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-background border border-border p-8 max-w-sm w-full z-10 shadow-lg"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-normal tracking-[1px] uppercase">Delete Coupon</h3>
+                <button onClick={() => setDeleteId(null)} className="text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-6">
+                Are you sure you want to delete this coupon? This action cannot be undone and will immediately disable the discount code.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteId(null)}
+                  className="flex-1 py-2.5 border border-border text-sm uppercase tracking-[1px] hover:border-foreground transition-colors bg-transparent cursor-pointer rounded-none font-light"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(deleteId!)}
+                  disabled={deleteMutation.isPending}
+                  className="flex-1 py-2.5 bg-red-600 text-white text-sm uppercase tracking-[1px] border-none cursor-pointer hover:bg-red-700 transition-colors disabled:opacity-60 rounded-none font-light"
+                >
+                  {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

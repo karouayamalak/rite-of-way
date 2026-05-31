@@ -163,18 +163,28 @@ export const getAllOrders = async (req: Request, res: Response, next: NextFuncti
 // ─── Update Order Status (Admin) ───────────────────────────────────────────
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { status, note } = req.body;
-
-    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
-    if (!validStatuses.includes(status)) {
-      return next(createError('Invalid status', 400));
-    }
+    const { status, note, paymentStatus } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) return next(createError('Order not found', 404));
 
-    order.status = status;
-    order.statusHistory.push({ status, note, updatedAt: new Date() });
+    if (status) {
+      const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+      if (!validStatuses.includes(status)) {
+        return next(createError('Invalid status', 400));
+      }
+      order.status = status;
+      order.statusHistory.push({ status, note, updatedAt: new Date() });
+    }
+
+    if (paymentStatus) {
+      const validPaymentStatuses = ['pending', 'paid', 'unpaid', 'refunded'];
+      if (!validPaymentStatuses.includes(paymentStatus)) {
+        return next(createError('Invalid payment status', 400));
+      }
+      order.payment.status = paymentStatus;
+    }
+
     await order.save();
 
     res.json({ success: true, data: order, message: 'Order status updated' });

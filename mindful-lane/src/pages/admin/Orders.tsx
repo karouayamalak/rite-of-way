@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, Eye, Phone } from "lucide-react";
+import { Search, Eye, Phone, Download } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Order {
   _id: string; orderNumber: string; total: number; status: string;
   createdAt: string;
-  shipping: { firstName: string; lastName: string; wilaya: string; phone?: string };
+  shipping: { firstName: string; lastName: string; address: string; wilaya: string; phone?: string; deliveryType?: string };
   customer?: { name: string; email: string };
   items: { title: string; quantity: number }[];
 }
@@ -27,6 +27,7 @@ const AdminOrders = () => {
   const [status, setStatus] = useState(searchParams.get("status") || "");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -49,6 +50,68 @@ const AdminOrders = () => {
   const orders = data?.data || [];
   const pagination = data?.pagination;
 
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [page, status, search]);
+
+  const handleBulkStatusUpdate = async (newStatus: string) => {
+    if (!newStatus || selectedIds.length === 0) return;
+    const promises = selectedIds.map(id => api.put(`/orders/${id}/status`, { status: newStatus }));
+    toast.promise(Promise.all(promises), {
+      loading: `Updating ${selectedIds.length} orders...`,
+      success: () => {
+        setSelectedIds([]);
+        qc.invalidateQueries({ queryKey: ["admin-orders"] });
+        return `Successfully updated ${selectedIds.length} orders`;
+      },
+      error: "Failed to update some orders",
+    });
+  };
+
+  const handleExportCSV = () => {
+    if (orders.length === 0) {
+      toast.error("No orders to export");
+      return;
+    }
+    
+    const headers = [
+      "Order Number",
+      "Customer Name",
+      "Phone Number",
+      "Address",
+      "Wilaya",
+      "Delivery Mode",
+      "Total (DA)",
+      "Status",
+      "Date"
+    ];
+
+    const rows = orders.map((o) => [
+      `"${o.orderNumber}"`,
+      `"${o.customer?.name || `${o.shipping.firstName} ${o.shipping.lastName}`}"`,
+      `"${o.shipping.phone || ""}"`,
+      `"${o.shipping.address.replace(/"/g, '""')}"`,
+      `"${o.shipping.wilaya}"`,
+      `"${o.shipping.deliveryType === "stopdesk" ? "Stop Desk" : "Domicile"}"`,
+      o.total,
+      `"${o.status}"`,
+      `"${new Date(o.createdAt).toLocaleDateString("en-GB")}"`
+    ]);
+
+    const csvContent = 
+      "data:text/csv;charset=utf-8,\uFEFF" + 
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `rite_of_way_orders_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("CSV file downloaded");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -56,7 +119,44 @@ const AdminOrders = () => {
           <h1 className="text-2xl font-light tracking-[2px]">ORDERS</h1>
           <p className="text-sm text-muted-foreground mt-1">{pagination?.total || 0} total orders</p>
         </div>
+        <button
+          onClick={handleExportCSV}
+          className="inline-flex items-center gap-2 border border-border px-4 py-2.5 text-xs uppercase tracking-[1px] hover:border-foreground transition-colors bg-background text-foreground cursor-pointer rounded-none font-light"
+        >
+          <Download size={14} /> Export CSV
+        </button>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-secondary border border-border p-4">
+          <div className="text-sm uppercase tracking-[0.5px]">
+            Selected <strong className="text-accent">{selectedIds.length}</strong> order{selectedIds.length !== 1 ? "s" : ""}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs uppercase tracking-[0.5px] text-muted-foreground">Bulk Action:</span>
+            <select
+              onChange={(e) => {
+                handleBulkStatusUpdate(e.target.value);
+                e.target.value = "";
+              }}
+              className="py-1.5 px-3 bg-background border border-border text-xs uppercase tracking-[0.5px] outline-none cursor-pointer text-foreground font-sans"
+            >
+              <option value="">Choose Status...</option>
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>Mark as {s}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="px-3 py-1.5 border border-border text-xs uppercase tracking-[0.5px] hover:border-foreground bg-transparent cursor-pointer font-sans"
+            >
+              Clear
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -79,6 +179,25 @@ const AdminOrders = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary">
+                <th className="px-5 py-3 text-left w-10">
+                  <input
+                    type="checkbox"
+                    checked={orders.length > 0 && selectedIds.length === orders.length}
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate = selectedIds.length > 0 && selectedIds.length < orders.length;
+                      }
+                    }}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(orders.map((o) => o._id));
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    className="w-4 h-4 accent-foreground cursor-pointer"
+                  />
+                </th>
                 {["Order #", "Customer", "Items", "Total", "Status", "Date", "Actions"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs uppercase tracking-[1px] text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                 ))}
@@ -88,15 +207,29 @@ const AdminOrders = () => {
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i} className="border-b border-border">
-                    {Array.from({ length: 7 }).map((_, j) => <td key={j} className="px-5 py-3"><div className="h-4 bg-secondary animate-pulse rounded" /></td>)}
+                    {Array.from({ length: 8 }).map((_, j) => <td key={j} className="px-5 py-3"><div className="h-4 bg-secondary animate-pulse rounded" /></td>)}
                   </tr>
                 ))
               ) : orders.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">No orders found</td></tr>
+                <tr><td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">No orders found</td></tr>
               ) : (
                 orders.map((order) => (
                   <motion.tr key={order._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     className="border-b border-border hover:bg-secondary/30 transition-colors">
+                    <td className="px-5 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(order._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds((prev) => [...prev, order._id]);
+                          } else {
+                            setSelectedIds((prev) => prev.filter((id) => id !== order._id));
+                          }
+                        }}
+                        className="w-4 h-4 accent-foreground cursor-pointer"
+                      />
+                    </td>
                     <td className="px-5 py-3 font-medium">#{order.orderNumber}</td>
                     <td className="px-5 py-3">
                       <p className="text-sm">{order.customer?.name || `${order.shipping.firstName} ${order.shipping.lastName}`}</p>
