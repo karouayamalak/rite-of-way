@@ -1,0 +1,34 @@
+# Dependency directories
+node_modules/
+mindful-lane/node_modules/
+server/node_modules/
+
+# Environment files (sensitive keys)
+.env
+.env.local
+.env.*.local
+mindful-lane/.env
+server/.env
+
+# Production build outputs
+dist/
+mindful-lane/dist/
+server/dist/
+dist-ssr/
+
+# Local uploaded files (static media files from fallback)
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+server/src/public/uploads/*
+!server/src/public/uploads/.gitkeep
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.log

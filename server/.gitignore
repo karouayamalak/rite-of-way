@@ -1,0 +1,18 @@
+# Environment files (contains passwords and database URIs)
+.env
+
+# Dependencies
+node_modules/
+
+# Compiled files
+dist/
+
+# Local uploaded files (static product images)
+public/uploads/*
+!public/uploads/.gitkeep
+src/public/uploads/*
+!src/public/uploads/.gitkeep
+
+# System and logs
+*.log
+.DS_Store
