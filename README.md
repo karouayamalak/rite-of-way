@@ -1,4 +1,4 @@
-# Rite of Way - Minimalist Luxury E-Shop
+# Rite of Way - Minimalist  E-Shop
 
 This is a luxury clothing online shop made for the Algerian market. It is simple, modern, and has a beautiful design.
 
