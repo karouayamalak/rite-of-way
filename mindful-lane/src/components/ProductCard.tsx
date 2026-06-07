@@ -21,7 +21,20 @@ const ProductCard = ({ product, index = 0, slug }: ProductCardProps) => {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addItem(product);
+
+    const hasMultipleSizes = product.sizes && product.sizes.length > 1 && !product.sizes.every(s => s === "One Size");
+    const hasMultipleColors = product.colors && product.colors.length > 1;
+
+    if (hasMultipleSizes || hasMultipleColors) {
+      navigate(productUrl);
+      toast.info("Please select size and color options");
+      return;
+    }
+
+    const size = product.sizes && product.sizes.length === 1 ? product.sizes[0] : (product.sizes?.includes("One Size") ? "One Size" : undefined);
+    const color = product.colors && product.colors.length === 1 ? product.colors[0] : undefined;
+
+    addItem(product, size, color);
     toast.success(`${product.title} added to cart`);
   };
 

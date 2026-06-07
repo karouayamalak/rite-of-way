@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronRight, MapPin, Package, Tag, X } from "lucide-react";
+import { Check, ChevronRight, Home, MapPin, Package, Store, Tag, X } from "lucide-react";
 import { useCart } from "@/lib/cart-context";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { wilayas, formatDZD } from "@/lib/algeria-shipping";
+import { useWilayas, formatDZD } from "@/lib/use-wilayas";
 import { api, ApiError } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
 type Step = "shipping" | "confirmation";
 
@@ -23,6 +24,13 @@ const Checkout = () => {
   const [orderNumber, setOrderNumber] = useState("");
   const [orderTotal, setOrderTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+
+  const { data: settingsData } = useQuery({
+    queryKey: ["store-settings"],
+    queryFn: () => api.get<{ success: boolean; data: any }>("/settings"),
+  });
+  const settings = settingsData?.data;
+  const freeShippingThreshold = settings?.freeShippingThreshold || 10000;
 
   const [shipping, setShipping] = useState({
     firstName: user?.name.split(" ")[0] || "",
@@ -40,12 +48,15 @@ const Checkout = () => {
 
   const [deliveryType, setDeliveryType] = useState<"home" | "stopdesk">("home");
 
+  const { wilayas } = useWilayas();
   const selectedWilaya = wilayas.find((w) => w.name === shipping.wilaya);
-  // stop desk is 200 DA cheaper
-  const shippingCost = selectedWilaya
+  const isFreeShipping = totalPrice >= freeShippingThreshold;
+  const shippingCost = isFreeShipping
+    ? 0
+    : selectedWilaya
     ? deliveryType === "stopdesk"
-      ? Math.max(0, selectedWilaya.shippingCost - 200)
-      : selectedWilaya.shippingCost
+      ? selectedWilaya.stopdeskShippingCost
+      : selectedWilaya.homeShippingCost
     : 0;
   const grandTotal = totalPrice + shippingCost - discount;
 
@@ -187,7 +198,9 @@ const Checkout = () => {
                 className={inputClass}>
                 <option value="">Select Wilaya *</option>
                 {wilayas.map((w) => (
-                  <option key={w.code} value={w.name}>{w.code} - {w.name}</option>
+                  <option key={w.code} value={w.name}>
+                    {w.code} - {w.name} (Dom. {formatDZD(w.homeShippingCost)} / Stop {formatDZD(w.stopdeskShippingCost)})
+                  </option>
                 ))}
               </select>
 
@@ -204,8 +217,8 @@ const Checkout = () => {
                           : "bg-transparent text-foreground border-border hover:border-foreground"
                       }`}
                     >
-                      <span>🏠 Livraison à Domicile</span>
-                      <span className="text-[10px] opacity-70">{formatDZD(selectedWilaya.shippingCost)}</span>
+                      <span className="inline-flex items-center gap-1"><Home size={13} />Livraison à Domicile</span>
+                      <span className="text-[10px] opacity-70">{formatDZD(selectedWilaya.homeShippingCost)}</span>
                     </button>
                     <button
                       type="button"
@@ -216,15 +229,15 @@ const Checkout = () => {
                           : "bg-transparent text-foreground border-border hover:border-foreground"
                       }`}
                     >
-                      <span>🏪 Stop Desk (Retrait)</span>
-                      <span className="text-[10px] opacity-70">{formatDZD(Math.max(0, selectedWilaya.shippingCost - 200))}</span>
+                      <span className="inline-flex items-center gap-1"><Store size={13} />Stop Desk (Retrait)</span>
+                      <span className="text-[10px] opacity-70">{formatDZD(selectedWilaya.stopdeskShippingCost)}</span>
                     </button>
                   </div>
                   <div className="bg-secondary p-4 text-sm">
                     {deliveryType === "home" ? (
-                      <p>📦 Livraison chez vous à <strong>{selectedWilaya.name}</strong>: <strong>{formatDZD(shippingCost)}</strong></p>
+                      <p className="inline-flex items-center gap-1"><Package size={13} />Livraison chez vous à <strong>{selectedWilaya.name}</strong>: <strong>{formatDZD(shippingCost)}</strong></p>
                     ) : (
-                      <p>🏪 Retrait au bureau Stop Desk à <strong>{selectedWilaya.name}</strong>: <strong>{formatDZD(shippingCost)}</strong></p>
+                      <p className="inline-flex items-center gap-1"><Store size={13} />Retrait au bureau Stop Desk à <strong>{selectedWilaya.name}</strong>: <strong>{formatDZD(shippingCost)}</strong></p>
                     )}
                   </div>
                 </motion.div>

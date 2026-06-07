@@ -38,11 +38,31 @@ const request = async <T>(
     delete headers['Content-Type'];
   }
 
-  const response = await fetch(url, config);
-  const data = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(url, config);
+  } catch {
+    // Network error — server is unreachable or CORS preflight failed
+    throw new ApiError('Cannot connect to server. Please check your connection and try again.', 0);
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = await response.json();
+  } catch {
+    // Response was not valid JSON (e.g. nginx HTML error page, rate-limit plain-text)
+    throw new ApiError(
+      response.ok ? 'Unexpected server response.' : `Server error (${response.status})`,
+      response.status
+    );
+  }
 
   if (!response.ok) {
-    throw new ApiError(data.message || 'Something went wrong', response.status, data);
+    throw new ApiError(
+      (data.message as string) || 'Something went wrong',
+      response.status,
+      data
+    );
   }
 
   return data as T;

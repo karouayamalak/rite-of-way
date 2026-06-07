@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Printer, ShoppingBag, User, MapPin, CreditCard, Calendar, Clock, Phone, Mail } from "lucide-react";
+import { ArrowLeft, Home, Package, Printer, ShoppingBag, Store, User, MapPin, CreditCard, Calendar, Clock, Phone, Mail } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -216,9 +216,9 @@ const AdminOrderDetail = () => {
           {/* Destination — large and bold for couriers */}
           <div style={{ backgroundColor: "#f5f5f5", border: "1px solid #ddd", padding: "10px 14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-              <div style={{ fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>📦 DESTINATAIRE / RECIPIENT</div>
-              <div style={{ fontSize: "11px", fontWeight: 800, padding: "2px 6px", backgroundColor: "#000", color: "#fff", textTransform: "uppercase", letterSpacing: "1px" }}>
-                {order.shipping.deliveryType === "stopdesk" ? "🏪 STOP DESK" : "🏠 DOMICILE"}
+              <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "9px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}><Package size={10} style={{ flexShrink: 0 }} /> DESTINATAIRE / RECIPIENT</div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", fontWeight: 800, padding: "2px 6px", backgroundColor: "#000", color: "#fff", textTransform: "uppercase", letterSpacing: "1px" }}>
+                {order.shipping.deliveryType === "stopdesk" ? <><Store size={10} /> STOP DESK</> : <><Home size={10} /> DOMICILE</>}
               </div>
             </div>
             <div style={{ fontSize: "18px", fontWeight: 700 }}>{order.shipping.firstName} {order.shipping.lastName}</div>
@@ -483,9 +483,9 @@ const AdminOrderDetail = () => {
                 <p className="text-xs text-muted-foreground uppercase tracking-[0.5px]">Delivery Method / Mode de Livraison</p>
                 <p className="font-medium mt-0.5 uppercase tracking-[0.5px] flex items-center gap-1.5">
                   {order.shipping.deliveryType === "stopdesk" ? (
-                    <>🏪 Stop Desk (Retrait au Bureau)</>
+                    <><Store size={13} /> Stop Desk (Retrait au Bureau)</>
                   ) : (
-                    <>🏠 Livraison à Domicile</>
+                    <><Home size={13} /> Livraison à Domicile</>
                   )}
                 </p>
               </div>

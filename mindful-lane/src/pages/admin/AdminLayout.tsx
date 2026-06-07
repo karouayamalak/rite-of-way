@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingCart, BarChart3,
-  Tag, Users, Menu, X, LogOut, ChevronRight
+  Tag, Users, Menu, X, LogOut, ChevronRight, Settings, History
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ThemeProvider } from "next-themes";
@@ -18,6 +18,8 @@ const navItems = [
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/coupons", label: "Coupons", icon: Tag },
+  { to: "/admin/activity-logs", label: "Audit Logs", icon: History },
+  { to: "/admin/settings", label: "Store Settings", icon: Settings },
 ];
 
 const AdminLayout = () => {

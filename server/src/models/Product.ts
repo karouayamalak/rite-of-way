@@ -31,6 +31,7 @@ export interface IProduct extends Document {
   images: IProductImage[];
   variants?: IColorVariant[];
   badge?: string;
+  status: 'active' | 'draft' | 'archived';
   isFeatured: boolean;
   isTrending: boolean;
   isNew: boolean;
@@ -108,6 +109,11 @@ const ProductSchema = new Schema<IProduct>(
     images: [ProductImageSchema],
     variants: [ColorVariantSchema],
     badge: { type: String, trim: true },
+    status: {
+      type: String,
+      enum: ['active', 'draft', 'archived'],
+      default: 'active',
+    },
     isFeatured: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
     isNew: { type: Boolean, default: false },
@@ -155,6 +161,7 @@ ProductSchema.index({ category: 1 });
 ProductSchema.index({ isFeatured: 1 });
 ProductSchema.index({ isTrending: 1 });
 ProductSchema.index({ price: 1 });
+ProductSchema.index({ stock: 1 });
 ProductSchema.index({ title: 'text', description: 'text' });
 
 export const Product = mongoose.model<IProduct>('Product', ProductSchema);

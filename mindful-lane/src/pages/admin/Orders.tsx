@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, Eye, Phone, Download } from "lucide-react";
+import { Search, Eye, Phone, Download, Home, Store } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ interface Order {
   shipping: { firstName: string; lastName: string; address: string; wilaya: string; phone?: string; deliveryType?: string };
   customer?: { name: string; email: string };
   items: { title: string; quantity: number }[];
+  shippingCost: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -198,7 +199,7 @@ const AdminOrders = () => {
                     className="w-4 h-4 accent-foreground cursor-pointer"
                   />
                 </th>
-                {["Order #", "Customer", "Items", "Total", "Status", "Date", "Actions"].map((h) => (
+                {["Order #", "Customer", "Items", "Shipping", "Total", "Status", "Date", "Actions"].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs uppercase tracking-[1px] text-muted-foreground font-normal whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -239,7 +240,17 @@ const AdminOrders = () => {
                       {order.items?.slice(0, 1).map((it) => `${it.title} ×${it.quantity}`).join("")}
                       {(order.items?.length || 0) > 1 && ` +${(order.items?.length || 0) - 1} more`}
                     </td>
-                    <td className="px-5 py-3">{order.total.toLocaleString("fr-DZ")} DA</td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <div className="text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          {order.shipping.deliveryType === "stopdesk" ? <><Store size={11} /> Stop Desk</> : <><Home size={11} /> Domicile</>}
+                        </span>
+                      </div>
+                      <div className="font-medium text-xs mt-0.5 text-foreground">
+                        {order.shippingCost ? `${order.shippingCost.toLocaleString("fr-DZ")} DA` : "0 DA (Gratuit)"}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap font-semibold text-foreground">{order.total.toLocaleString("fr-DZ")} DA</td>
                     <td className="px-5 py-3">
                       <select
                         value={order.status}

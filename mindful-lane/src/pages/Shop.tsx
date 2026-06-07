@@ -40,6 +40,8 @@ const mapProduct = (p: ApiProduct): Product => ({
   badge: p.badge,
   description: p.description,
   category: p.category,
+  sizes: p.sizes,
+  colors: p.colors,
 });
 
 const SORT_OPTIONS = [

@@ -33,6 +33,8 @@ import AdminOrderDetail from "./pages/admin/OrderDetail";
 import AdminAnalytics from "./pages/admin/Analytics";
 import AdminCoupons from "./pages/admin/Coupons";
 import AdminCustomers from "./pages/admin/Customers";
+import AdminSettings from "./pages/admin/Settings";
+import AdminActivityLogs from "./pages/admin/ActivityLogs";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +74,8 @@ const App = () => (
                     <Route path="analytics" element={<AdminAnalytics />} />
                     <Route path="coupons" element={<AdminCoupons />} />
                     <Route path="customers" element={<AdminCustomers />} />
+                    <Route path="settings" element={<AdminSettings />} />
+                    <Route path="activity-logs" element={<AdminActivityLogs />} />
                   </Route>
 
                   {/* public routes */}

@@ -1,8 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { Order } from '../models/Order';
 import { Coupon } from '../models/Coupon';
+import { Product } from '../models/Product';
 import { createError } from '../middleware/errorHandler';
 import { sendOrderConfirmationEmail } from '../lib/email';
+import { localCache } from '../lib/cache';
+import { logAdminActivity } from '../lib/activity';
 
 // ─── Create Order ──────────────────────────────────────────────────────────
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -15,6 +18,194 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     if (!shipping?.firstName || !shipping?.phone || !shipping?.wilaya) {
       return next(createError('Shipping information is incomplete', 400));
+    }
+
+    // Validate stock and prepare update operations
+    const deductions: {
+      productId: string;
+      color?: string;
+      size?: string;
+      quantity: number;
+      title: string;
+    }[] = [];
+
+    for (const item of items) {
+      const dbProduct = await Product.findById(item.product);
+      if (!dbProduct) {
+        return next(createError(`Product "${item.title}" no longer exists`, 404));
+      }
+
+      // Check if product has variants
+      if (dbProduct.variants && dbProduct.variants.length > 0) {
+        // Resolve color if missing
+        let resolvedColor = item.color;
+        if (!resolvedColor && dbProduct.variants.length === 1) {
+          resolvedColor = dbProduct.variants[0].color;
+        }
+
+        // Color is required if there are multiple colors and it wasn't resolved/provided
+        if (!resolvedColor && dbProduct.variants.length > 1) {
+          return next(createError(`Color must be selected for "${item.title}"`, 400));
+        }
+
+        // Find the variant
+        const variant = dbProduct.variants.find(
+          (v) => v.color.toLowerCase() === (resolvedColor || '').toLowerCase()
+        );
+        if (!variant) {
+          return next(createError(`Color "${resolvedColor || item.color}" is not available for "${item.title}"`, 400));
+        }
+
+        // Resolve size if missing
+        let resolvedSize = item.size;
+        if (!resolvedSize && variant.sizes.length === 1) {
+          resolvedSize = variant.sizes[0].size;
+        }
+
+        // Size is required if there are multiple sizes and it wasn't resolved/provided
+        const hasMultipleSizes = variant.sizes.length > 1 && !variant.sizes.every(s => s.size === 'One Size');
+        if (!resolvedSize && hasMultipleSizes) {
+          return next(createError(`Size must be selected for "${item.title}"`, 400));
+        }
+
+        // Check stock based on sizes
+        if (variant.sizes.length > 0) {
+          const sizeObj = variant.sizes.find(
+            (s) => s.size.toLowerCase() === (resolvedSize || '').toLowerCase()
+          );
+          if (!sizeObj || sizeObj.stock < item.quantity) {
+            return next(
+              createError(
+                `Insufficient stock for "${item.title}" (${variant.color}${sizeObj ? ' - ' + sizeObj.size : ''}). Available: ${
+                  sizeObj ? sizeObj.stock : 0
+                }`,
+                400
+              )
+            );
+          }
+          item.size = sizeObj.size;
+        } else {
+          // If no sizes exist in this variant, fall back to global product stock
+          if (dbProduct.stock < item.quantity) {
+            return next(
+              createError(
+                `Insufficient stock for "${item.title}". Available: ${dbProduct.stock}`,
+                400
+              )
+            );
+          }
+        }
+
+        item.color = variant.color;
+      } else {
+        // Simple stock check
+        if (dbProduct.stock < item.quantity) {
+          return next(
+            createError(
+              `Insufficient stock for "${item.title}". Available: ${dbProduct.stock}`,
+              400
+            )
+          );
+        }
+      }
+
+      deductions.push({
+        productId: item.product,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+        title: item.title,
+      });
+    }
+
+    // Perform atomic deductions
+    const completedDeductions: typeof deductions = [];
+    try {
+      for (const d of deductions) {
+        let updatedProduct;
+        if (d.color && d.size) {
+          // Atomic update for nested array variants
+          updatedProduct = await Product.findOneAndUpdate(
+            {
+              _id: d.productId,
+              'variants.color': d.color,
+              'variants.sizes.size': d.size,
+              'variants.sizes.stock': { $gte: d.quantity },
+            },
+            {
+              $inc: {
+                'variants.$[outer].sizes.$[inner].stock': -d.quantity,
+              },
+            },
+            {
+              arrayFilters: [
+                { 'outer.color': d.color },
+                { 'inner.size': d.size },
+              ],
+              new: true,
+            }
+          );
+        } else {
+          // Atomic update for standard stock
+          updatedProduct = await Product.findOneAndUpdate(
+            {
+              _id: d.productId,
+              stock: { $gte: d.quantity },
+            },
+            {
+              $inc: { stock: -d.quantity },
+            },
+            { new: true }
+          );
+        }
+
+        if (!updatedProduct) {
+          throw new Error(`Stock deduction failed for product ID ${d.productId} due to concurrent updates`);
+        }
+
+        // Trigger pre-save hooks to recalculate stock totals
+        await updatedProduct.save();
+        completedDeductions.push(d);
+      }
+    } catch (err: any) {
+      // Rollback successful deductions to ensure transactional integrity
+      for (const cd of completedDeductions) {
+        if (cd.color && cd.size) {
+          const p = await Product.findOneAndUpdate(
+            {
+              _id: cd.productId,
+              'variants.color': cd.color,
+              'variants.sizes.size': cd.size,
+            },
+            {
+              $inc: {
+                'variants.$[outer].sizes.$[inner].stock': cd.quantity,
+              },
+            },
+            {
+              arrayFilters: [
+                { 'outer.color': cd.color },
+                { 'inner.size': cd.size },
+              ],
+              new: true,
+            }
+          );
+          if (p) await p.save();
+        } else {
+          const p = await Product.findByIdAndUpdate(
+            cd.productId,
+            { $inc: { stock: cd.quantity } },
+            { new: true }
+          );
+          if (p) await p.save();
+        }
+      }
+      return next(
+        createError(
+          err.message || 'Checkout failed due to concurrent inventory updates. Please try again.',
+          409
+        )
+      );
     }
 
     // Calculate totals
@@ -64,6 +255,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       payment: { method: 'cod', status: 'pending' },
       status: 'pending',
     });
+
+    // Invalidate cached product catalogs due to stock level changes
+    localCache.deletePattern(/^cache:\/api\/products/);
 
     // Send confirmation email (non-blocking)
     const emailAddress = req.user?.email || guestEmail;
@@ -168,6 +362,9 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     const order = await Order.findById(req.params.id);
     if (!order) return next(createError('Order not found', 404));
 
+    const oldStatus = order.status;
+    const oldPaymentStatus = order.payment.status;
+
     if (status) {
       const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
       if (!validStatuses.includes(status)) {
@@ -186,6 +383,14 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     }
 
     await order.save();
+
+    await logAdminActivity(
+      req.user!.userId,
+      req.user!.name,
+      'ORDER_STATUS_UPDATE',
+      `Updated order #${order.orderNumber} status: "${oldStatus}" -> "${order.status}" (payment: "${oldPaymentStatus}" -> "${order.payment.status}")`,
+      req.ip
+    );
 
     res.json({ success: true, data: order, message: 'Order status updated' });
   } catch (error) {

@@ -8,6 +8,8 @@ export interface Product {
   badge?: string;
   description?: string;
   category?: string;
+  sizes?: string[];
+  colors?: string[];
 }
 
 export interface CartItem extends Product {

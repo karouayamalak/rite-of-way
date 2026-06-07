@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingBag, Heart, ArrowLeft, Minus, Plus, Check, Star } from "lucide-react";
@@ -17,6 +17,7 @@ interface ApiProduct {
   sizes: string[]; colors: string[]; stock: number;
   images: { url: string; alt?: string }[];
   badge?: string;
+  status?: string;
   ratings: { average: number; count: number };
   variants?: {
     color: string;
@@ -44,6 +45,14 @@ const ProductDetail = () => {
   const { addItem } = useCart();
   const { addItem: addToWishlist, removeItem: removeFromWishlist, isInWishlist } = useWishlist();
   const { isAuthenticated } = useAuth();
+
+  const { data: settingsData } = useQuery({
+    queryKey: ["store-settings"],
+    queryFn: () => api.get<{ success: boolean; data: any }>("/settings"),
+  });
+  const settings = settingsData?.data;
+  const whatsappNumber = settings?.whatsappNumber || "213550123456";
+  const freeShippingThreshold = settings?.freeShippingThreshold || 10000;
 
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
@@ -75,6 +84,25 @@ const ProductDetail = () => {
     select: (d) => ({ ...d, data: d.data.filter((p) => p._id !== productData?.data._id).slice(0, 3) }),
   });
 
+  const product = productData?.data;
+
+  // ── Auto-select when only one option exists ──────────────────────────────
+  useEffect(() => {
+    if (!product) return;
+    // Auto-select single color
+    if (product.colors?.length === 1 && !selectedColor) {
+      setSelectedColor(product.colors[0]);
+    }
+    // Auto-select single size (or "One Size")
+    if (product.sizes?.length === 1 && !selectedSize) {
+      setSelectedSize(product.sizes[0]);
+    }
+    // Auto-select "One Size" if present
+    if (product.sizes?.includes("One Size") && !selectedSize) {
+      setSelectedSize("One Size");
+    }
+  }, [product]);
+
   if (isLoading) {
     return (
       <main className="pt-20 min-h-screen">
@@ -94,7 +122,6 @@ const ProductDetail = () => {
     );
   }
 
-  const product = productData?.data;
   if (!product) {
     return (
       <main className="pt-20 min-h-screen flex items-center justify-center">
@@ -117,7 +144,12 @@ const ProductDetail = () => {
   };
   const reviews = reviewsData?.data || [];
   const related = relatedData?.data || [];
-  const needsSize = !["Glasses", "Hats", "One Size"].includes(product.category);
+
+  // ── Size / color logic ───────────────────────────────────────────────────
+  const hasMultipleSizes = product.sizes?.length > 1 && !product.sizes.every(s => s === "One Size");
+  const hasMultipleColors = product.colors?.length > 1;
+  // Only require size selection if product has more than one distinct size and it's not "One Size"
+  const needsSizeSelection = hasMultipleSizes && !product.sizes.includes("One Size");
 
   // Calculate variant-specific stock
   let availableStock = product.stock;
@@ -138,8 +170,14 @@ const ProductDetail = () => {
   }
 
   const handleAddToCart = () => {
-    if (needsSize && product.sizes.length > 0 && !selectedSize) {
+    // Only require size if there are multiple sizes to choose from
+    if (needsSizeSelection && !selectedSize) {
       toast.error("Please select a size");
+      return;
+    }
+    // Only require color if there are multiple colors to choose from
+    if (hasMultipleColors && !selectedColor) {
+      toast.error("Please select a color");
       return;
     }
     if (quantity > availableStock) {
@@ -169,8 +207,8 @@ const ProductDetail = () => {
       toast.success("Review submitted!");
       setReviewForm({ rating: 5, comment: "" });
       refetchReviews();
-    } catch {
-      toast.error("Failed to submit review. You may have already reviewed this product.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to submit review. You may have already reviewed this product.");
     } finally {
       setIsSubmittingReview(false);
     }
@@ -241,8 +279,8 @@ const ProductDetail = () => {
 
             <p className="text-muted-foreground leading-relaxed mb-8">{product.description}</p>
 
-            {/* Color selector */}
-            {product.colors?.length > 0 && (
+            {/* Color selector — only show if more than one color */}
+            {hasMultipleColors && (
               <div className="mb-6">
                 <p className="text-sm uppercase tracking-[1px] mb-3">Color: <span className="text-muted-foreground">{selectedColor || "Select"}</span></p>
                 <div className="flex gap-2 flex-wrap">
@@ -256,8 +294,15 @@ const ProductDetail = () => {
               </div>
             )}
 
-            {/* Size selector */}
-            {product.sizes?.length > 0 && product.sizes[0] !== "One Size" && (
+            {/* Show single color as info (not a selector) */}
+            {!hasMultipleColors && product.colors?.length === 1 && (
+              <div className="mb-4">
+                <p className="text-sm text-muted-foreground">Color: <span className="text-foreground">{product.colors[0]}</span></p>
+              </div>
+            )}
+
+            {/* Size selector — only show if multiple distinct sizes */}
+            {hasMultipleSizes && (
               <div className="mb-8">
                 <p className="text-sm uppercase tracking-[1px] mb-3">Size: <span className="text-muted-foreground">{selectedSize || "Select"}</span></p>
                 <div className="flex gap-2 flex-wrap">
@@ -316,7 +361,7 @@ const ProductDetail = () => {
             {/* order via whatsapp */}
             <div className="mt-4">
               <a
-                href={`https://wa.me/${import.meta.env.VITE_WHATSAPP_NUMBER || "213550123456"}?text=${encodeURIComponent(
+                href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
                   `Bonjour! Je souhaite commander le produit "${product.title}" (prix: ${(product.discountPrice || product.price).toLocaleString("fr-DZ")} DA). Veuillez me contacter pour confirmer les détails de livraison.`
                 )}`}
                 target="_blank"
@@ -331,7 +376,7 @@ const ProductDetail = () => {
             </div>
 
             <div className="mt-8 border-t border-border pt-6 space-y-3 text-sm text-muted-foreground">
-              <p>✓ Free shipping on orders over 10,000 DA</p>
+              <p>✓ Free shipping on orders over {freeShippingThreshold.toLocaleString("fr-DZ")} DA</p>
               <p>✓ Cash on delivery across all 58 wilayas</p>
               <p>✓ 7-day return policy</p>
             </div>
@@ -400,7 +445,7 @@ const ProductDetail = () => {
           <h2 className="text-2xl font-light tracking-[2px] text-center mb-12">YOU MAY ALSO LIKE</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
             {related.map((p, i) => (
-              <ProductCard key={p._id} product={{ id: p._id, title: p.title, price: p.discountPrice || p.price, image: p.images?.[0]?.url || "", badge: p.badge, category: p.category }} index={i} slug={p.slug} />
+              <ProductCard key={p._id} product={{ id: p._id, title: p.title, price: p.discountPrice || p.price, image: p.images?.[0]?.url || "", badge: p.badge, category: p.category, sizes: p.sizes, colors: p.colors }} index={i} slug={p.slug} />
             ))}
           </div>
         </section>

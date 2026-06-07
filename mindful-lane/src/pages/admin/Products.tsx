@@ -9,7 +9,7 @@ import { toast } from "sonner";
 interface ApiProduct {
   _id: string; title: string; category: string; price: number;
   discountPrice?: number; stock: number; isFeatured: boolean;
-  isTrending: boolean; badge?: string;
+  isTrending: boolean; badge?: string; status?: string;
   images: { url: string }[];
 }
 
@@ -23,7 +23,7 @@ const AdminProducts = () => {
     queryKey: ["admin-products", search, category],
     queryFn: () =>
       api.get<{ success: boolean; data: ApiProduct[]; pagination: { total: number } }>(
-        `/products?limit=50${search ? `&search=${encodeURIComponent(search)}` : ""}${category !== "All" ? `&category=${encodeURIComponent(category)}` : ""}`
+        `/products?limit=50&showAll=true${search ? `&search=${encodeURIComponent(search)}` : ""}${category !== "All" ? `&category=${encodeURIComponent(category)}` : ""}`
       ),
   });
 
@@ -142,6 +142,14 @@ const AdminProducts = () => {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex gap-1 flex-wrap">
+                        {/* Publication status */}
+                        <span className={`text-xs px-2 py-0.5 font-medium ${
+                          p.status === 'draft' ? 'bg-amber-100 text-amber-700' :
+                          p.status === 'archived' ? 'bg-secondary text-muted-foreground' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {p.status === 'draft' ? 'Draft' : p.status === 'archived' ? 'Archived' : 'Active'}
+                        </span>
                         {p.isFeatured && <span className="text-xs bg-secondary px-2 py-0.5 text-muted-foreground">Featured</span>}
                         {p.isTrending && <span className="text-xs bg-secondary px-2 py-0.5 text-muted-foreground">Trending</span>}
                       </div>

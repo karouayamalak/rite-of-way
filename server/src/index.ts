@@ -7,6 +7,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import mongoose from 'mongoose';
+import cluster from 'cluster';
+import os from 'os';
 
 import { connectDB } from './lib/db';
 import authRoutes from './routes/auth.routes';
@@ -16,6 +19,9 @@ import uploadRoutes from './routes/upload.routes';
 import couponRoutes from './routes/coupon.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import categoryRoutes from './routes/category.routes';
+import settingsRoutes from './routes/settings.routes';
+import activityRoutes from './routes/activity.routes';
+import wilayaRoutes from './routes/wilaya.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -34,19 +40,21 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-// Database connection middleware (ensures connection in serverless environments)
-app.use(async (_req, _res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (err) {
-    next(err);
+// Database connection middleware optimized for high concurrency
+app.use((_req, _res, next) => {
+  // If already connected, pass through synchronously to bypass microtask scheduling latency
+  if (mongoose.connection.readyState === 1) {
+    return next();
   }
+  // Fallback to connection logic for serverless cold-starts
+  connectDB()
+    .then(() => next())
+    .catch(next);
 });
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Increased to support 10k+ concurrent browsing requests
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' },
@@ -54,7 +62,7 @@ const limiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 25, // Increased to support multi-device environments
   message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
 });
 
@@ -82,6 +90,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/admin/analytics', analyticsRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/admin/activity-logs', activityRoutes);
+app.use('/api/wilayas', wilayaRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });
@@ -90,12 +101,30 @@ app.use((_req, res) => {
 app.use(errorHandler);
 
 const startServer = async () => {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`\n🚀 Rite of Way API running at http://localhost:${PORT}`);
-    console.log(`📦 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🌐 CORS allowed for: ${process.env.CLIENT_URL}\n`);
-  });
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction && cluster.isPrimary) {
+    const numCPUs = os.cpus().length || 1;
+    console.log(`\n👑 Primary process ${process.pid} is running in production mode.`);
+    console.log(`Spawning ${numCPUs} worker processes for CPU clustering...\n`);
+
+    for (let i = 0; i < numCPUs; i++) {
+      cluster.fork();
+    }
+
+    cluster.on('exit', (worker) => {
+      console.warn(`⚠️ Worker process ${worker.process.pid} died. Spawning a new worker...`);
+      cluster.fork();
+    });
+  } else {
+    await connectDB();
+    app.listen(PORT, () => {
+      const prefix = isProduction ? `👷 Worker process ${process.pid} -` : '🚀';
+      console.log(`\n${prefix} Rite of Way API running at http://localhost:${PORT}`);
+      console.log(`📦 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🌐 CORS allowed for: ${process.env.CLIENT_URL}\n`);
+    });
+  }
 };
 
 startServer();

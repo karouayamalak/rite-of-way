@@ -28,8 +28,10 @@ const Login = () => {
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);
+      } else if (err instanceof Error) {
+        toast.error(err.message);
       } else {
-        toast.error("Login failed. Please try again.");
+        toast.error("An unexpected error occurred. Please try again.");
       }
     } finally {
       setIsLoading(false);

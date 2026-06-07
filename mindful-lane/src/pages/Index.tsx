@@ -19,6 +19,8 @@ interface ApiProduct {
   badge?: string;
   description?: string;
   category: string;
+  sizes?: string[];
+  colors?: string[];
 }
 
 const features = [
@@ -129,6 +131,8 @@ const Index = () => {
                     badge: p.badge,
                     description: p.description,
                     category: p.category,
+                    sizes: p.sizes,
+                    colors: p.colors,
                   }}
                   index={i}
                   slug={p.slug}

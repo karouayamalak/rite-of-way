@@ -92,13 +92,19 @@ const AdminDashboard = () => {
 
   const { data: productsData } = useQuery({
     queryKey: ["admin-products-low-stock"],
-    queryFn: () => api.get<{ success: boolean; data: DashboardProduct[] }>("/products?limit=100"),
+    queryFn: () => api.get<{ success: boolean; data: DashboardProduct[] }>("/products?stockLessThan=5&limit=10"),
+  });
+
+  const { data: activityData } = useQuery({
+    queryKey: ["admin-recent-activities"],
+    queryFn: () => api.get<{ success: boolean; data: any[] }>("/admin/activity-logs?page=1&limit=6"),
   });
 
   const stats = statsData?.data;
   const chart = chartData?.data || [];
   const topProducts = topData?.data || [];
-  const lowStockProducts = productsData?.data?.filter((p) => p.stock <= 5) || [];
+  const lowStockProducts = productsData?.data || [];
+  const recentActivities = activityData?.data || [];
 
   if (isLoading) {
     return (
@@ -246,50 +252,77 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Recent orders */}
-      <div className="border border-border">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-sm uppercase tracking-[1px]">Recent Orders</h2>
-          <Link to="/admin/orders" className="text-xs uppercase tracking-[1px] text-muted-foreground hover:text-foreground no-underline transition-colors">
-            View All <ChevronRight size={12} className="inline" />
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                {["Order #", "Customer", "Total", "Status", "Date"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-xs uppercase tracking-[1px] text-muted-foreground font-normal">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(stats?.recentOrders || []).map((order) => (
-                <tr key={order._id} className="border-b border-border hover:bg-secondary/50 transition-colors">
-                  <td className="px-6 py-3">
-                    <Link to={`/admin/orders/${order._id}`} className="font-medium hover:text-accent no-underline transition-colors">
-                      #{order.orderNumber}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-3 text-muted-foreground">
-                    {order.customer?.name || `${order.shipping.firstName} ${order.shipping.lastName}`}
-                  </td>
-                  <td className="px-6 py-3">{order.total.toLocaleString("fr-DZ")} DA</td>
-                  <td className="px-6 py-3">
-                    <span className={`px-2 py-1 text-xs uppercase tracking-[0.5px] ${statusColors[order.status] || "text-muted-foreground"}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-muted-foreground">
-                    {new Date(order.createdAt).toLocaleDateString("en-GB")}
-                  </td>
+      {/* Bottom section: Recent Orders + Activity Feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent orders */}
+        <div className="lg:col-span-2 border border-border bg-card">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-sm uppercase tracking-[1px]">Recent Orders</h2>
+            <Link to="/admin/orders" className="text-xs uppercase tracking-[1px] text-muted-foreground hover:text-foreground no-underline transition-colors">
+              View All <ChevronRight size={12} className="inline" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  {["Order #", "Customer", "Total", "Status", "Date"].map((h) => (
+                    <th key={h} className="px-6 py-3 text-left text-xs uppercase tracking-[1px] text-muted-foreground font-normal">{h}</th>
+                  ))}
                 </tr>
-              ))}
-              {(!stats?.recentOrders || stats.recentOrders.length === 0) && (
-                <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">No orders yet</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(stats?.recentOrders || []).map((order) => (
+                  <tr key={order._id} className="border-b border-border hover:bg-secondary/50 transition-colors">
+                    <td className="px-6 py-3">
+                      <Link to={`/admin/orders/${order._id}`} className="font-medium hover:text-accent no-underline transition-colors">
+                        #{order.orderNumber}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-3 text-muted-foreground">
+                      {order.customer?.name || `${order.shipping.firstName} ${order.shipping.lastName}`}
+                    </td>
+                    <td className="px-6 py-3">{order.total.toLocaleString("fr-DZ")} DA</td>
+                    <td className="px-6 py-3">
+                      <span className={`px-2 py-1 text-xs uppercase tracking-[0.5px] ${statusColors[order.status] || "text-muted-foreground"}`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-muted-foreground">
+                      {new Date(order.createdAt).toLocaleDateString("en-GB")}
+                    </td>
+                  </tr>
+                ))}
+                {(!stats?.recentOrders || stats.recentOrders.length === 0) && (
+                  <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">No orders yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Audit trail feed */}
+        <div className="border border-border bg-card flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-sm uppercase tracking-[1px]">Admin Activity</h2>
+            <Link to="/admin/activity-logs" className="text-xs uppercase tracking-[1px] text-muted-foreground hover:text-foreground no-underline transition-colors">
+              View All <ChevronRight size={12} className="inline" />
+            </Link>
+          </div>
+          <div className="p-6 space-y-4 max-h-[350px] overflow-y-auto font-sans flex-1">
+            {recentActivities.map((log: any) => (
+              <div key={log._id} className="text-xs border-b border-border/40 pb-3 last:border-none last:pb-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-foreground">{log.adminName}</span>
+                  <span className="text-[10px] text-muted-foreground">{new Date(log.createdAt).toLocaleDateString("en-GB")}</span>
+                </div>
+                <p className="text-muted-foreground leading-normal mt-0.5">{log.details}</p>
+              </div>
+            ))}
+            {recentActivities.length === 0 && (
+              <p className="text-muted-foreground text-center text-xs py-8">No admin activities logged yet</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

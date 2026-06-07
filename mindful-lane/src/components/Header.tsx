@@ -6,6 +6,8 @@ import { useWishlist } from "@/lib/wishlist-context";
 import { useAuth } from "@/lib/auth-context";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +24,16 @@ const Header = () => {
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const { data: settingsData } = useQuery({
+    queryKey: ["store-settings"],
+    queryFn: () => api.get<{ success: boolean; data: any }>("/settings"),
+  });
+
+  const settings = settingsData?.data;
+  const storeName = settings?.storeName || "RITE OF WAY";
+  const promoActive = settings?.promoBannerActive;
+  const promoText = settings?.promoBannerText;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -51,6 +63,11 @@ const Header = () => {
         scrolled ? "shadow-sm" : ""
       } border-b border-border`}
     >
+      {promoActive && promoText && (
+        <div className="bg-foreground text-background text-[10px] sm:text-xs text-center py-1.5 px-4 uppercase tracking-[2px] font-medium font-sans">
+          {promoText}
+        </div>
+      )}
       <div className="max-w-[1400px] mx-auto px-5 py-3 flex justify-between items-center">
         <button
           className="md:hidden bg-transparent border-none text-foreground"
@@ -62,9 +79,9 @@ const Header = () => {
 
         <Link
           to="/"
-          className="text-[1.8rem] font-light tracking-[2px] text-foreground no-underline"
+          className="text-[1.8rem] font-light tracking-[2px] text-foreground no-underline uppercase"
         >
-          RITE OF WAY
+          {storeName}
         </Link>
 
         <nav className="hidden md:flex gap-8">

@@ -24,7 +24,8 @@ interface ColorVariant {
 interface ProductFormData {
   title: string; description: string; price: string; discountPrice: string;
   brand: string; category: string; sizes: string[]; colors: string[];
-  stock: string; badge: string; isFeatured: boolean; isTrending: boolean; isNew: boolean;
+  stock: string; badge: string; status: 'active' | 'draft' | 'archived';
+  isFeatured: boolean; isTrending: boolean; isNew: boolean;
   images: ProductImage[];
   variants: ColorVariant[];
 }
@@ -32,6 +33,7 @@ interface ProductFormData {
 const EMPTY_FORM: ProductFormData = {
   title: "", description: "", price: "", discountPrice: "", brand: "",
   category: "", sizes: [], colors: [], stock: "0", badge: "",
+  status: "active",
   isFeatured: false, isTrending: false, isNew: false, images: [],
   variants: [],
 };
@@ -92,6 +94,7 @@ const AdminProductForm = () => {
         colors: colorsList,
         stock: String(p.stock || 0),
         badge: p.badge || "",
+        status: (p as any).status || "active",
         isFeatured: p.isFeatured || false,
         isTrending: p.isTrending || false,
         isNew: p.isNew || false,
@@ -232,6 +235,7 @@ const AdminProductForm = () => {
       sizes: form.sizes, colors: form.colors,
       stock: calculatedTotalStock,
       badge: form.badge || undefined,
+      status: form.status,
       isFeatured: form.isFeatured, isTrending: form.isTrending, isNew: form.isNew,
       images: form.images,
       variants: form.variants,
@@ -430,19 +434,50 @@ const AdminProductForm = () => {
 
         {/* Status flags */}
         <div className="border border-border p-6">
-          <h2 className="text-sm uppercase tracking-[1px] mb-4">Product Status</h2>
-          <div className="flex flex-wrap gap-6">
-            {[
-              { key: "isFeatured", label: "Featured (shown on homepage)" },
-              { key: "isTrending", label: "Trending" },
-              { key: "isNew", label: "New Arrival" },
-            ].map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form[key as keyof typeof form] as boolean}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.checked })} className={checkboxClass} />
-                <span className="text-sm">{label}</span>
-              </label>
-            ))}
+          <h2 className="text-sm uppercase tracking-[1px] mb-4">Product Status & Visibility</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Publication Status */}
+            <div>
+              <label className={labelClass}>Publication Status *</label>
+              <div className="flex gap-2 mt-1.5">
+                {([
+                  { value: 'active', label: 'Active', desc: 'Visible to customers', color: 'text-green-600' },
+                  { value: 'draft', label: 'Draft', desc: 'Hidden from shop', color: 'text-amber-600' },
+                  { value: 'archived', label: 'Archived', desc: 'Permanently hidden', color: 'text-muted-foreground' },
+                ] as const).map(({ value, label, desc, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setForm({ ...form, status: value })}
+                    className={`flex-1 py-2 px-3 text-xs border transition-colors cursor-pointer text-center ${
+                      form.status === value
+                        ? 'bg-foreground text-background border-foreground'
+                        : 'bg-transparent border-border hover:border-foreground'
+                    }`}
+                  >
+                    <span className={`block font-medium ${form.status === value ? 'text-background' : color}`}>{label}</span>
+                    <span className={`block text-[10px] mt-0.5 ${form.status === value ? 'text-background/70' : 'text-muted-foreground'}`}>{desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Feature flags */}
+            <div>
+              <label className={labelClass}>Feature Flags</label>
+              <div className="flex flex-col gap-3 mt-1.5">
+                {[
+                  { key: "isFeatured", label: "Featured (shown on homepage)" },
+                  { key: "isTrending", label: "Trending" },
+                  { key: "isNew", label: "New Arrival" },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={form[key as keyof typeof form] as boolean}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.checked })} className={checkboxClass} />
+                    <span className="text-sm">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 

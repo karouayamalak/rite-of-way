@@ -3,6 +3,8 @@ import { Product } from '../models/Product';
 import { Review } from '../models/Review';
 import { Category } from '../models/Category';
 import { createError } from '../middleware/errorHandler';
+import { localCache } from '../lib/cache';
+import { logAdminActivity } from '../lib/activity';
 
 // ─── Get All Products (with filters, search, pagination) ──────────────────
 export const getProducts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -19,14 +21,28 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
       isFeatured,
       isTrending,
       isNew,
+      stockLessThan,
+      status,       // admin can pass status filter
+      showAll,      // admin flag to bypass status filter
     } = req.query;
 
     const query: Record<string, unknown> = {};
+
+    // By default, only show active products (unless admin explicitly requests all)
+    if (showAll !== 'true') {
+      query.status = status || 'active';
+    } else if (status) {
+      query.status = status;
+    }
 
     if (category && category !== 'All') query.category = category;
     if (isFeatured === 'true') query.isFeatured = true;
     if (isTrending === 'true') query.isTrending = true;
     if (isNew === 'true') query.isNew = true;
+
+    if (stockLessThan !== undefined) {
+      query.stock = { $lte: Number(stockLessThan) };
+    }
 
     if (minPrice || maxPrice) {
       query.price = {};
@@ -96,6 +112,20 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
 export const createProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const product = await Product.create(req.body);
+
+    // Invalidate cached product catalog
+    localCache.deletePattern(/^cache:\/api\/products/);
+    localCache.deletePattern(/^cache:\/api\/categories/);
+
+    // Log admin action
+    await logAdminActivity(
+      req.user!.userId,
+      req.user!.name,
+      'PRODUCT_CREATE',
+      `Created product "${product.title}" (price: ${product.price} DA)`,
+      req.ip
+    );
+
     res.status(201).json({ success: true, data: product, message: 'Product created successfully' });
   } catch (error) {
     next(error);
@@ -105,11 +135,28 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
 // ─── Update Product (Admin) ────────────────────────────────────────────────
 export const updateProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const originalProduct = await Product.findById(req.params.id);
+    if (!originalProduct) return next(createError('Product not found', 404));
+
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
     if (!product) return next(createError('Product not found', 404));
+
+    // Invalidate cached product catalog
+    localCache.deletePattern(/^cache:\/api\/products/);
+    localCache.deletePattern(/^cache:\/api\/categories/);
+
+    // Log admin action
+    await logAdminActivity(
+      req.user!.userId,
+      req.user!.name,
+      'PRODUCT_UPDATE',
+      `Updated product "${product.title}"`,
+      req.ip
+    );
+
     res.json({ success: true, data: product, message: 'Product updated successfully' });
   } catch (error) {
     next(error);
@@ -121,6 +168,20 @@ export const deleteProduct = async (req: Request, res: Response, next: NextFunct
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return next(createError('Product not found', 404));
+    
+    // Invalidate cached product catalog
+    localCache.deletePattern(/^cache:\/api\/products/);
+    localCache.deletePattern(/^cache:\/api\/categories/);
+
+    // Log admin action
+    await logAdminActivity(
+      req.user!.userId,
+      req.user!.name,
+      'PRODUCT_DELETE',
+      `Deleted product "${product.title}"`,
+      req.ip
+    );
+
     // Also delete reviews
     await Review.deleteMany({ product: req.params.id });
     res.json({ success: true, message: 'Product deleted successfully' });
@@ -177,6 +238,9 @@ export const addProductReview = async (req: Request, res: Response, next: NextFu
       rating: Number(rating),
       comment,
     });
+
+    // Invalidate cached product catalog so product detail pages and lists get fresh scores
+    localCache.deletePattern(/^cache:\/api\/products/);
 
     res.status(201).json({ success: true, data: review, message: 'Review added successfully' });
   } catch (error) {
