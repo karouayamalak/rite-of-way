@@ -2,10 +2,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import slowDown from 'express-slow-down';
 import path from 'path';
 import mongoose from 'mongoose';
 import cluster from 'cluster';
@@ -26,6 +28,12 @@ import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// --- Compression (gzip/brotli) — must be first middleware ---
+app.use(compression({
+  level: 6,          // balanced speed vs ratio (default is 6)
+  threshold: 1024,   // only compress responses larger than 1kb
+}));
 
 app.use(
   helmet({
@@ -52,25 +60,36 @@ app.use((_req, _res, next) => {
     .catch(next);
 });
 
+// --- Rate limiting: hard block after 1000 req / 15 min per IP ---
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000, // Increased to support 10k+ concurrent browsing requests
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' },
 });
 
+// --- Slow-down: start adding delay after 200 req / 15 min per IP ---
+// This gracefully degrades heavy clients instead of hard-blocking them.
+const speedLimiter = slowDown({
+  windowMs: 15 * 60 * 1000,
+  delayAfter: 200,
+  delayMs: (hits) => (hits - 200) * 100, // 100ms per extra req above threshold
+  maxDelayMs: 5000,
+});
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 25, // Increased to support multi-device environments
+  max: 25,
   message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
 });
 
 app.use('/api/', limiter);
+app.use('/api/', speedLimiter);
 app.use('/api/auth', authLimiter);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 const uploadsPath = path.join(__dirname, '../public/uploads');
 app.use('/uploads', express.static(uploadsPath));

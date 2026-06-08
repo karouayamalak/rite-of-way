@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import dns from 'dns';
+import os from 'os';
 
 // Only set custom DNS options in development to avoid issues in restricted serverless environments like Vercel
 if (process.env.NODE_ENV === 'development') {
@@ -33,10 +34,15 @@ export const connectDB = async (): Promise<void> => {
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/rite-of-way';
   const localFallbackUri = 'mongodb://127.0.0.1:27017/rite-of-way';
 
+  // Per-worker pool: divide total budget (300) across all CPU cores
+  // so the cluster as a whole stays within Atlas connection limits.
+  const numCPUs = os.cpus().length || 1;
+  const poolSize = Math.max(10, Math.floor(300 / numCPUs));
+
   try {
     const conn = await mongoose.connect(uri, {
-      maxPoolSize: 100,
-      minPoolSize: 10,
+      maxPoolSize: poolSize,
+      minPoolSize: Math.min(5, poolSize),
       socketTimeoutMS: 45000,
       serverSelectionTimeoutMS: 5000,
     } as mongoose.ConnectOptions);
@@ -51,8 +57,8 @@ export const connectDB = async (): Promise<void> => {
       try {
         console.log(`Trying fallback to local MongoDB database (${localFallbackUri})...`);
         const conn = await mongoose.connect(localFallbackUri, {
-          maxPoolSize: 100,
-          minPoolSize: 10,
+          maxPoolSize: poolSize,
+          minPoolSize: Math.min(5, poolSize),
           socketTimeoutMS: 45000,
           serverSelectionTimeoutMS: 3000,
         } as mongoose.ConnectOptions);
